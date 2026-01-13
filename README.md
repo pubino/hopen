@@ -130,3 +130,44 @@ source /path/to/hopen.zsh
 # Run all tests in Docker (isolated environment)
 ./run_tests.sh --docker
 ```
+
+## Releasing a New Version
+
+To publish a new release that users can install via `brew upgrade`:
+
+1. **Update the version** in `Cargo.toml`:
+   ```toml
+   version = "0.2.0"
+   ```
+
+2. **Commit and tag** the release:
+   ```bash
+   git add Cargo.toml Cargo.lock
+   git commit -m "Bump version to 0.2.0"
+   git tag v0.2.0
+   git push origin main --tags
+   ```
+
+3. **Get the SHA256** of the release tarball:
+   ```bash
+   curl -sL https://github.com/pubino/hopen/archive/refs/tags/v0.2.0.tar.gz | shasum -a 256
+   ```
+
+4. **Update the formula** in both repositories:
+
+   - `Formula/hopen.rb` (this repo)
+   - `Formula/hopen.rb` in [pubino/homebrew-hopen](https://github.com/pubino/homebrew-hopen)
+
+   Update these fields:
+   ```ruby
+   url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.0.tar.gz"
+   sha256 "<new-sha256-hash>"
+   ```
+
+5. **Commit and push** the formula changes to both repos.
+
+Users can then upgrade with:
+```bash
+brew update
+brew upgrade hopen
+```
