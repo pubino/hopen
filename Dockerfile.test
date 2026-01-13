@@ -1,0 +1,58 @@
+# Dockerfile for running hopen test suite
+#
+# This Dockerfile builds and tests both the shell script and Rust implementations.
+#
+# Usage:
+#   docker build -f Dockerfile.test -t hopen-test .
+#   docker run --rm hopen-test
+#
+# To run specific tests:
+#   docker run --rm hopen-test zsh       # Run only shell script tests
+#   docker run --rm hopen-test rust      # Run only Rust tests
+#   docker run --rm hopen-test all       # Run all tests (default)
+
+FROM rust:slim-bookworm AS builder
+
+# Set working directory
+WORKDIR /build
+
+# Copy Cargo files first for better caching
+COPY Cargo.toml Cargo.lock ./
+
+# Copy actual source code
+COPY src ./src
+
+# Build the binary
+RUN cargo build --release
+
+# ============================================================================
+# Test stage
+# ============================================================================
+FROM debian:bookworm-slim
+
+# Install test dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    zsh \
+    python3 \
+    coreutils \
+    procps \
+    lsof \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy built binary from builder stage
+COPY --from=builder /build/target/release/hopen ./target/release/hopen
+
+# Copy source files
+COPY hopen.zsh ./
+COPY tests/ ./tests/
+
+# Make scripts executable
+RUN chmod +x tests/test_zsh.zsh tests/test_rust.sh tests/docker-entrypoint.sh
+
+ENTRYPOINT ["tests/docker-entrypoint.sh"]
+CMD ["all"]
