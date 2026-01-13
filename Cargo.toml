@@ -1,0 +1,16 @@
+[package]
+name = "hopen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
+warp = "0.3"
+open = "5.0"
+sysinfo = "0.30"
+inquire = "0.7" # For the menu
+colored = "2.0"
+anyhow = "1.0"
+home = "0.5"
+ctrlc = "3.4"
