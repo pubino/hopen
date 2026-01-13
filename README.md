@@ -1,6 +1,6 @@
 # hopen
 
-A fast local HTTP server for viewing HTML files, written in Rust. Perfect for browsing static site mirrors (e.g., from SiteSucker) while maintaining correct relative paths.
+A fast local HTTP server for viewing HTML files. Useful for local development while maintaining correct relative paths.
 
 ## Features
 
@@ -130,9 +130,3 @@ source /path/to/hopen.zsh
 # Run all tests in Docker (isolated environment)
 ./run_tests.sh --docker
 ```
-
-## License
-
-MIT License - Copyright (c) 2026 Princeton University
-
-See [LICENSE.md](LICENSE.md) for details.
