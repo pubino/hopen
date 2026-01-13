@@ -29,6 +29,10 @@ const MAX_PORT: u16 = 8100;
 ///   URL: http://localhost:8000/blog/post.html
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
+#[command(after_help = "Environment variables:
+  HOPEN_SITE_HOME    Set default site root directory (same as -r/--root)
+                     Add to ~/.zshrc or ~/.bashrc:
+                     export HOPEN_SITE_HOME=/path/to/your/site/root")]
 struct Args {
     /// Optional HTML file to open in the browser
     filename: Option<String>,
