@@ -149,8 +149,17 @@ async fn main() -> Result<()> {
             })
         })
         .map(|p| {
-            let path = PathBuf::from(&p);
-            path.canonicalize().unwrap_or(path)
+            // Handle tilde expansion (e.g., ~/Downloads)
+            let expanded = if p.starts_with("~/") {
+                if let Some(home) = home::home_dir() {
+                    PathBuf::from(p.replacen("~/", &format!("{}/", home.display()), 1))
+                } else {
+                    PathBuf::from(p)
+                }
+            } else {
+                PathBuf::from(p)
+            };
+            expanded.canonicalize().unwrap_or(expanded)
         });
 
     // Validate: filename requires site_home
@@ -178,7 +187,9 @@ async fn main() -> Result<()> {
     // (relative path from site_home to PWD) + filename
     let (server_dir, url_path) = if let Some(ref sh) = site_home {
         // Validate: PWD must be under site_home
-        if !current_dir.starts_with(sh) {
+        // CRITICAL: We relax this check for the background service (--no-browser)
+        // because the service might be launched from a generic directory (like HOME).
+        if !current_dir.starts_with(sh) && !args.no_browser {
             eprintln!("{}", "Error: Current directory is not under site_home".red());
             eprintln!("{} {}", "Site home:".cyan(), sh.display().to_string().magenta());
             eprintln!(
@@ -190,6 +201,7 @@ async fn main() -> Result<()> {
         }
 
         // Calculate relative path from site_home to PWD
+        // If PWD is not under site_home (e.g. running as service), default to root
         let relative = current_dir
             .strip_prefix(sh)
             .unwrap_or(Path::new(""))
@@ -215,10 +227,11 @@ async fn main() -> Result<()> {
     // =========================================================================
     // 3. Check for HTML Files
     // =========================================================================
-    if !has_html_files(&current_dir) {
+    // Verify that the directory we are serving (server_dir) has HTML files
+    if !has_html_files(&server_dir) {
         eprintln!(
             "{}",
-            "✗ No HTML files found in current directory".red().bold()
+            format!("✗ No HTML files found in {}", if site_home.is_some() { "site home" } else { "current directory" }).red().bold()
         );
         eprintln!(
             "{}",
@@ -226,8 +239,8 @@ async fn main() -> Result<()> {
         );
         eprintln!(
             "{} {}",
-            "Current directory:".cyan(),
-            current_dir.display().to_string().magenta()
+            "Directory:".cyan(),
+            server_dir.display().to_string().magenta()
         );
         std::process::exit(1);
     }

@@ -105,6 +105,10 @@ hopen() {
     # Fall back to ~/.hopenrc if still not provided
     if [[ -z "$site_home" && -f "$HOME/.hopenrc" ]]; then
         site_home=$(cat "$HOME/.hopenrc" | head -1 | xargs)
+        # Expand ~ if present in the file
+        if [[ "$site_home" == "~/"* ]]; then
+            site_home="${HOME}/${site_home#~/}"
+        fi
     fi
 
     # Filename argument only makes sense when we know the site root,
@@ -192,7 +196,9 @@ hopen() {
         fi
 
         # Ensure current directory is within site_home (required for relative path calculation)
-        if [[ "$PWD" != "$site_home"* ]]; then
+        # CRITICAL: We relax this check for the background service (-n)
+        # because the service might be launched from a generic directory (like HOME).
+        if [[ "$PWD" != "$site_home"* && "$no_browser_flag" == false ]]; then
             echo -e "${RED}Error: Current directory is not under site_home${NC}"
             echo -e "${CYAN}Site home: ${MAGENTA}$site_home${NC}"
             echo -e "${CYAN}Current directory: ${MAGENTA}$PWD${NC}"
@@ -202,10 +208,13 @@ hopen() {
 
         # Calculate relative path: strip site_home prefix from PWD
         # e.g., PWD="/a/b/c", site_home="/a/b" -> relative_path="c"
-        if [[ "$PWD" == "$site_home" ]]; then
-            relative_path=""
-        else
-            relative_path="${PWD#$site_home/}"
+        local relative_path=""
+        if [[ "$PWD" == "$site_home"* ]]; then
+            if [[ "$PWD" == "$site_home" ]]; then
+                relative_path=""
+            else
+                relative_path="${PWD#$site_home/}"
+            fi
         fi
 
         # Build the final URL path from relative_path and filename
@@ -250,8 +259,12 @@ hopen() {
             if [[ -n "$server_port" ]]; then
                 echo -e "${YELLOW}⚠ Reusing existing server (PID: $server_pid, port: $server_port)${NC}"
                 if [[ "$no_browser_flag" == false ]]; then
-                    open "http://localhost:$server_port${url_path}"
-                    echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$server_port${url_path}${NC}"
+                    if command -v open &> /dev/null; then
+                        open "http://localhost:$server_port${url_path}"
+                        echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$server_port${url_path}${NC}"
+                    else
+                        echo -e "${GREEN}✓ Server is available at ${BLUE}http://localhost:$server_port${url_path}${NC}"
+                    fi
                 else
                     echo -e "${GREEN}✓ Server is available at ${BLUE}http://localhost:$server_port${url_path}${NC}"
                 fi
@@ -386,13 +399,18 @@ hopen() {
         return 1
     fi
 
-    # 4. Check if PWD contains at least 1 HTML file
+    # 4. Check if directory has HTML files
     local -a html_files
     local has_html=false
 
+    # Search in server_dir (site_home if specified, otherwise PWD)
+    local search_dir="$PWD"
+    [[ -n "$site_home" ]] && search_dir="$site_home"
+
     # Populate array with actual matching files
+    # null_glob ensures the loop doesn't run if no files match
     for pattern in "${HTML_PATTERNS[@]}"; do
-        for file in ${~pattern}; do
+        for file in "${search_dir}"/${~pattern}; do
             if [[ -f "$file" ]]; then
                 html_files+=("$file")
                 has_html=true
@@ -401,9 +419,9 @@ hopen() {
     done
 
     if [[ "$has_html" == false ]]; then
-        echo -e "${RED}${BOLD}✗ No HTML files found in current directory${NC}"
+        echo -e "${RED}${BOLD}✗ No HTML files found in ${site_home:+site home}${site_home:-current directory}${NC}"
         echo -e "${YELLOW}This script requires at least one HTML file (*.htm or *.html)${NC}"
-        echo -e "${CYAN}Current directory: ${MAGENTA}$PWD${NC}"
+        echo -e "${CYAN}Directory: ${MAGENTA}$search_dir${NC}"
         echo ""
         [[ -z "$old_nullglob" ]] && unsetopt null_glob
         return 1
@@ -507,7 +525,8 @@ hopen() {
     local server_pid=$!
 
     # Disown the process so it survives terminal closure
-    disown $server_pid
+    # Redirect stderr to avoid "job not found" warnings in some environments
+    disown $server_pid 2>/dev/null
 
     # Give it a moment to start
     sleep 0.5
@@ -525,13 +544,21 @@ hopen() {
                 echo -n -e "${BOLD}Open in browser now? [y/N]: ${NC}"
                 read -r open_browser
                 if [[ "$open_browser" =~ ^[Yy]$ ]]; then
-                    open "http://localhost:$port${url_path}"
-                    echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
+                    if command -v open &> /dev/null; then
+                        open "http://localhost:$port${url_path}"
+                        echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
+                    else
+                        echo -e "${YELLOW}⚠ 'open' command not found. Please open manually at: ${BLUE}http://localhost:$port${url_path}${NC}"
+                    fi
                 fi
             else
                 # Default: auto-open browser
-                open "http://localhost:$port${url_path}"
-                echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
+                if command -v open &> /dev/null; then
+                    open "http://localhost:$port${url_path}"
+                    echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
+                else
+                    echo -e "${GREEN}✓ Server is available at ${BLUE}http://localhost:$port${url_path}${NC}"
+                fi
             fi
         fi
     else

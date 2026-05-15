@@ -409,7 +409,37 @@ export HOME="$ORIG_HOME_VAL"
 echo ""
 
 # ============================================================================
-# Section 9: Headless Mode Tests (-n)
+# Section 10: Service Startup Tests (Path Expansion & Generic Dir)
+# ============================================================================
+echo -e "${BOLD}--- Service Startup Tests (Path Expansion & Generic Dir) ---${NC}"
+
+# 1. Create a mock home and .hopenrc with tilde
+SERVICE_HOME=$(mktemp -d)
+export ORIG_HOME_VAL="$HOME"
+export HOME="$SERVICE_HOME"
+
+# Create a directory to serve
+mkdir -p "$HOME/hopen-site"
+echo "<html><body>Expanded Test</body></html>" > "$HOME/hopen-site/index.html"
+echo "~/hopen-site" > "$HOME/.hopenrc"
+
+# 2. Try to start from a completely different directory (simulating service launch from HOME)
+cd /tmp
+output=$(hopen -n -e 2>&1) || true
+
+# Should NOT error about "Current directory is not under site_home"
+assert_not_contains "$output" "Error: Current directory is not under site_home" "Service can start from generic directory"
+assert_not_contains "$output" "ERROR: No site directory configured" "Service recognizes .hopenrc with tilde"
+assert_not_contains "$output" "No HTML files found" "HTML files detected in site home"
+
+# Restore HOME and directory
+export HOME="$ORIG_HOME_VAL"
+cd "$ORIG_DIR"
+
+echo ""
+
+# ============================================================================
+# Section 11: Headless Mode Tests (-n)
 # ============================================================================
 echo -e "${BOLD}--- Headless Mode Tests (-n) ---${NC}"
 

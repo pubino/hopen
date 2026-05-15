@@ -444,7 +444,45 @@ export HOME="$ORIG_HOME_VAL"
 echo ""
 
 # ============================================================================
-# Section 11: Headless Mode Tests (--no-browser)
+# Section 11: Service Startup Tests (Path Expansion & Generic Dir)
+# ============================================================================
+echo -e "${BOLD}--- Service Startup Tests (Path Expansion & Generic Dir) ---${NC}"
+
+# 1. Create a site directory
+SERVICE_SITE_DIR=$(mktemp -d)
+mkdir -p "$SERVICE_SITE_DIR"
+echo "<html><body>Service Test</body></html>" > "$SERVICE_SITE_DIR/index.html"
+
+# 2. Create a mock home and .hopenrc with tilde
+SERVICE_HOME=$(mktemp -d)
+# We can't easily use real tilde in a script that isn't running in a real shell,
+# but we can test the logic by setting HOME and creating the file.
+export ORIG_HOME_VAL="$HOME"
+export HOME="$SERVICE_HOME"
+
+# Create a symlink to simulate tilde expansion if needed, but our code does string replacement.
+# Let's test the string replacement logic by putting "~/hopen-site" in .hopenrc
+# and ensuring the code expands it to "$HOME/hopen-site"
+mkdir -p "$HOME/hopen-site"
+echo "<html><body>Expanded Test</body></html>" > "$HOME/hopen-site/index.html"
+echo "~/hopen-site" > "$HOME/.hopenrc"
+
+# 3. Try to start from a completely different directory (simulating service launch from /)
+cd /tmp
+output=$("$HOPEN_BIN" --no-browser -e 2>&1) || true
+
+# Should NOT error about "Current directory is not under site_home"
+assert_not_contains "$output" "Error: Current directory is not under site_home" "Service can start from generic directory"
+assert_not_contains "$output" "ERROR: No site directory configured" "Service recognizes .hopenrc with tilde"
+
+# Restore HOME and directory
+export HOME="$ORIG_HOME_VAL"
+cd "$ORIG_DIR"
+
+echo ""
+
+# ============================================================================
+# Section 12: Headless Mode Tests (--no-browser)
 # ============================================================================
 echo -e "${BOLD}--- Headless Mode Tests (--no-browser) ---${NC}"
 
