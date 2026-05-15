@@ -1,8 +1,8 @@
 class Hopen < Formula
   desc "Hopen"
   homepage "https://github.com/pubino/hopen"
-  url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.3.tar.gz"
-  sha256 "433f0d13c7ee1e19166391b75faf8959e50b61b98092b58c2f68b8027374b35a"
+  url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.4.tar.gz"
+  sha256 "7287cfd0c69739f10c56557659e2597f8788495880ad913adff87ba0ff3f5299"
   license "MIT"
 
   depends_on "rust" => :build
@@ -34,8 +34,9 @@ class Hopen < Formula
 
   service do
     # Run the binary with the new flag to prevent browser popups on boot.
+    # We pass -f to keep the process in the foreground so Homebrew can manage it.
     # We do NOT pass the -r flag here; we rely on the Rust app checking ~/.hopenrc
-    run [opt_bin/"hopen", "--no-browser"]
+    run [opt_bin/"hopen", "--no-browser", "-f"]
 
     # CRITICAL: Only restart if the app exits successfully (0).
     # If it exits with (1) due to a missing ~/.hopenrc file, it will stay dead
