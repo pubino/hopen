@@ -135,6 +135,10 @@ source /path/to/hopen.zsh
 
 If you installed `hopen` via Homebrew, you can set it up to run automatically in the background whenever you start your Mac.
 
+### For New & Existing Users
+
+If you have already been using `hopen` via the command line (e.g., `hopen filename.html`), the only additional step required to use the background service is to define your site's root directory:
+
 1. **Configure your directory:** Because background services don't read your shell environment variables, you need to tell `hopen` which directory to serve by creating a `.hopenrc` file in your home folder.
    ```bash
    echo "/path/to/your/site/root" > ~/.hopenrc
@@ -146,6 +150,10 @@ If you installed `hopen` via Homebrew, you can set it up to run automatically in
    ```
 
 The server will now run silently in the background on port 8000.
+
+### Security Note
+
+By default, the `hopen` service binds to `localhost` (127.0.0.1). This means the server is **not exposed to your local area network (LAN)** and can only be accessed from your own machine.
 
 **Troubleshooting:**
 If the service fails to start, ensure your `~/.hopenrc` file exists and contains a valid absolute path. You can view the service error logs here:
