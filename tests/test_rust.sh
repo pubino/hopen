@@ -147,6 +147,7 @@ assert_contains "$output" "-f, --foreground" "--help shows -f flag"
 assert_contains "$output" "-m, --menu" "--help shows -m flag"
 assert_contains "$output" "-p, --prompt" "--help shows -p flag"
 assert_contains "$output" "-r, --root" "--help shows -r flag"
+assert_contains "$output" "--no-browser" "--help shows --no-browser flag"
 
 echo ""
 
@@ -160,9 +161,19 @@ TEST_DIR=$(mktemp -d)
 echo "<html><body>Test</body></html>" > "$TEST_DIR/test.html"
 cd "$TEST_DIR"
 
-# Test: Filename without site_home should fail
+# Temporarily clear HOME to avoid picking up ~/.hopenrc if it exists
+ORIG_HOME_VAL="$HOME"
+export HOME=$(mktemp -d)
+
+# Test: Filename without site_home should fail with specific error
 output=$("$HOPEN_BIN" testfile.html 2>&1) || true
-assert_contains "$output" "requires either -r flag or HOPEN_SITE_HOME" "Filename without site_home shows error"
+assert_contains "$output" "requires either -r flag, HOPEN_SITE_HOME, or ~/.hopenrc" "Filename without site_home shows specific error"
+
+# Test: No configuration at all should fail with general error
+output=$("$HOPEN_BIN" 2>&1) || true
+assert_contains "$output" "ERROR: No site directory configured" "No site directory configured shows general error"
+
+export HOME="$ORIG_HOME_VAL"
 
 echo ""
 
@@ -189,7 +200,7 @@ NO_HTML_DIR=$(mktemp -d)
 echo "not html" > "$NO_HTML_DIR/readme.txt"
 cd "$NO_HTML_DIR"
 
-output=$("$HOPEN_BIN" 2>&1) || true
+output=$("$HOPEN_BIN" -r "$NO_HTML_DIR" 2>&1) || true
 assert_contains "$output" "No HTML files found" "No HTML files in directory shows error"
 
 # Test with .htm extension
@@ -198,7 +209,7 @@ echo "<html></html>" > "$HTM_DIR/page.htm"
 cd "$HTM_DIR"
 
 # Test with -e to avoid starting a server
-output=$("$HOPEN_BIN" -e 2>&1) || true
+output=$("$HOPEN_BIN" -r "$HTM_DIR" -e 2>&1) || true
 assert_not_contains "$output" "No HTML files found" ".htm files are detected"
 
 # Test with .html extension
@@ -206,7 +217,7 @@ HTML_DIR=$(mktemp -d)
 echo "<html></html>" > "$HTML_DIR/index.html"
 cd "$HTML_DIR"
 
-output=$("$HOPEN_BIN" -e 2>&1) || true
+output=$("$HOPEN_BIN" -r "$HTML_DIR" -e 2>&1) || true
 assert_not_contains "$output" "No HTML files found" ".html files are detected"
 
 echo ""
@@ -404,11 +415,53 @@ cleanup_servers
 echo ""
 
 # ============================================================================
+# Section 10: Config File Tests (.hopenrc)
+# ============================================================================
+echo -e "${BOLD}--- Config File Tests (.hopenrc) ---${NC}"
+
+# Create a temporary HOME
+MOCK_HOME=$(mktemp -d)
+ORIG_HOME_VAL="$HOME"
+export HOME="$MOCK_HOME"
+
+# Create a site directory and .hopenrc
+CONFIG_SITE_DIR=$(mktemp -d)
+echo "<html></html>" > "$CONFIG_SITE_DIR/index.html"
+echo "$CONFIG_SITE_DIR" > "$HOME/.hopenrc"
+
+# Test: .hopenrc is recognized (test with -e to avoid starting server)
+cd "$CONFIG_SITE_DIR"
+output=$("$HOPEN_BIN" -e 2>&1) || true
+assert_not_contains "$output" "ERROR: No site directory configured" ".hopenrc is recognized"
+
+# Test: Filename works with .hopenrc
+output=$("$HOPEN_BIN" index.html -e 2>&1) || true
+assert_not_contains "$output" "requires either -r flag" "Filename works with .hopenrc"
+
+# Restore HOME
+export HOME="$ORIG_HOME_VAL"
+
+echo ""
+
+# ============================================================================
+# Section 11: Headless Mode Tests (--no-browser)
+# ============================================================================
+echo -e "${BOLD}--- Headless Mode Tests (--no-browser) ---${NC}"
+
+# We can't easily test if a browser DOESN'T open, but we can verify the flag is accepted
+# and doesn't cause errors.
+cd "$URL_TEST_DIR"
+output=$("$HOPEN_BIN" --no-browser -e 2>&1) || true
+assert_not_contains "$output" "error:" "--no-browser flag is accepted"
+
+echo ""
+
+# ============================================================================
 # Cleanup
 # ============================================================================
 cleanup_servers
 cd "$ORIG_DIR"
-rm -rf "$TEST_DIR" "$NO_HTML_DIR" "$HTM_DIR" "$HTML_DIR" "$SITE_DIR" "$OTHER_DIR" "$SERVER_TEST_DIR" "$URL_TEST_DIR" 2>/dev/null || true
+rm -rf "$TEST_DIR" "$NO_HTML_DIR" "$HTM_DIR" "$HTML_DIR" "$SITE_DIR" "$OTHER_DIR" "$SERVER_TEST_DIR" "$URL_TEST_DIR" "$MOCK_HOME" "$CONFIG_SITE_DIR" 2>/dev/null || true
 
 # ============================================================================
 # Results

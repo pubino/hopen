@@ -131,6 +131,26 @@ source /path/to/hopen.zsh
 ./run_tests.sh --docker
 ```
 
+## Running as a Background Service (macOS)
+
+If you installed `hopen` via Homebrew, you can set it up to run automatically in the background whenever you start your Mac.
+
+1. **Configure your directory:** Because background services don't read your shell environment variables, you need to tell `hopen` which directory to serve by creating a `.hopenrc` file in your home folder.
+   ```bash
+   echo "/path/to/your/site/root" > ~/.hopenrc
+   ```
+
+2. **Start the service:**
+   ```bash
+   brew services start hopen
+   ```
+
+The server will now run silently in the background on port 8000.
+
+**Troubleshooting:**
+If the service fails to start, ensure your `~/.hopenrc` file exists and contains a valid absolute path. You can view the service error logs here:
+`cat $(brew --prefix)/var/log/hopen.error.log`
+
 ## Releasing a New Version
 
 To publish a new release that users can install via `brew upgrade`:

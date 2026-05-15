@@ -29,6 +29,22 @@ class Hopen < Formula
     EOS
   end
 
+  service do
+    # Run the binary with the new flag to prevent browser popups on boot.
+    # We do NOT pass the -r flag here; we rely on the Rust app checking ~/.hopenrc
+    run [opt_bin/"hopen", "--no-browser"]
+
+    # CRITICAL: Only restart if the app exits successfully (0).
+    # If it exits with (1) due to a missing ~/.hopenrc file, it will stay dead
+    # instead of entering an infinite restart loop and flooding the user's logs.
+    keep_alive successful_exit: true
+
+    # standard homebrew log locations
+    log_path var/"log/hopen.log"
+    error_log_path var/"log/hopen.error.log"
+    working_dir ENV["HOME"]
+  end
+
   test do
     # Create a test HTML file
     (testpath/"test.html").write("<html><body>Test</body></html>")

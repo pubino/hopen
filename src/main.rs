@@ -60,6 +60,10 @@ struct Args {
     #[arg(short = 'p', long = "prompt")]
     prompt: bool,
 
+    /// Disable auto-opening of the web browser.
+    #[arg(long = "no-browser")]
+    no_browser: bool,
+
     /// Internal flag: run as a background server (used when spawning ourselves)
     #[arg(long = "internal-serve", hide = true)]
     internal_serve: bool,
@@ -133,11 +137,17 @@ async fn main() -> Result<()> {
     // =========================================================================
     let current_dir = env::current_dir().context("Failed to get current directory")?;
 
-    // Determine site_home: -r flag -> HOPEN_SITE_HOME env var -> None
+    // Determine site_home: -r flag -> HOPEN_SITE_HOME env var -> ~/.hopenrc -> None
     let site_home: Option<PathBuf> = args
         .site_home
         .clone()
         .or_else(|| env::var("HOPEN_SITE_HOME").ok())
+        .or_else(|| {
+            home::home_dir().and_then(|mut p| {
+                p.push(".hopenrc");
+                fs::read_to_string(p).ok().map(|s| s.trim().to_string())
+            })
+        })
         .map(|p| {
             let path = PathBuf::from(&p);
             path.canonicalize().unwrap_or(path)
@@ -146,8 +156,19 @@ async fn main() -> Result<()> {
     // Validate: filename requires site_home
     if args.filename.is_some() && site_home.is_none() {
         bail!(
-            "Error: filename argument requires either -r flag or HOPEN_SITE_HOME to be set"
+            "Error: filename argument requires either -r flag, HOPEN_SITE_HOME, or ~/.hopenrc to be set"
         );
+    }
+
+    // Validate: site_home is required (either from flags, env, or config)
+    if site_home.is_none() && !args.exit && !args.internal_serve {
+        eprintln!("{}", "ERROR: No site directory configured for hopen.".red().bold());
+        eprintln!(
+            "{}",
+            "To run hopen, please use -r <DIR>, set HOPEN_SITE_HOME, or create a ~/.hopenrc file."
+                .yellow()
+        );
+        std::process::exit(1);
     }
 
     // =========================================================================
@@ -255,8 +276,12 @@ async fn main() -> Result<()> {
                 "{}",
                 format!("⚠ Reusing existing server (PID: {}, port: {})", pid, existing_port).yellow()
             );
-            open::that(&full_url)?;
-            println!("{}", format!("✓ Browser opened at {}", full_url).green());
+            if !args.no_browser {
+                open::that(&full_url)?;
+                println!("{}", format!("✓ Browser opened at {}", full_url).green());
+            } else {
+                println!("{}", format!("✓ Server is available at {}", full_url).green());
+            }
             return Ok(());
         }
 
@@ -338,7 +363,7 @@ async fn main() -> Result<()> {
                 // Find new available port and start
                 let new_port = find_available_port(DEFAULT_PORT)?;
                 let new_url = format!("http://localhost:{}{}", new_port, url_path_str);
-                start_server(&server_dir, new_port, &new_url, args.prompt, args.foreground).await?;
+                start_server(&server_dir, new_port, &new_url, args.prompt, args.foreground, args.no_browser).await?;
             }
             ExistingServerMenu::Cancel => {
                 println!("{}", "Cancelled - no changes made".yellow());
@@ -377,10 +402,10 @@ async fn main() -> Result<()> {
 
             match choice {
                 StartupMenu::StartBackground => {
-                    start_server(&server_dir, port, &full_url, args.prompt, false).await?;
+                    start_server(&server_dir, port, &full_url, args.prompt, false, args.no_browser).await?;
                 }
                 StartupMenu::StartForeground => {
-                    start_server(&server_dir, port, &full_url, args.prompt, true).await?;
+                    start_server(&server_dir, port, &full_url, args.prompt, true, args.no_browser).await?;
                 }
                 StartupMenu::Cancel => {
                     println!("{}", "Cancelled - no server started".yellow());
@@ -388,7 +413,7 @@ async fn main() -> Result<()> {
             }
         } else {
             // Default: start server based on -f flag
-            start_server(&server_dir, port, &full_url, args.prompt, args.foreground).await?;
+            start_server(&server_dir, port, &full_url, args.prompt, args.foreground, args.no_browser).await?;
         }
     }
 
@@ -528,7 +553,7 @@ async fn run_server(root: &Path, port: u16) -> Result<()> {
 }
 
 /// Start the HTTP server and open the browser
-async fn start_server(root: &Path, port: u16, url: &str, prompt: bool, foreground: bool) -> Result<()> {
+async fn start_server(root: &Path, port: u16, url: &str, prompt: bool, foreground: bool, no_browser: bool) -> Result<()> {
     println!("{}", "✓ All checks passed!".green().bold());
     println!(
         "{} {}",
@@ -549,27 +574,29 @@ async fn start_server(root: &Path, port: u16, url: &str, prompt: bool, foregroun
         // Foreground Mode (-f): Run warp server in foreground (blocking)
         // =========================================================================
 
-        // Open browser: auto by default, prompt with -p flag
-        if prompt {
-            print!("{}", "Open in browser now? [y/N]: ".bold());
-            use std::io::Write;
-            std::io::stdout().flush()?;
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-            if input.trim().eq_ignore_ascii_case("y") {
-                open::that(url)?;
+        // Open browser: auto by default, prompt with -p flag, disabled with --no-browser
+        if !no_browser {
+            if prompt {
+                print!("{}", "Open in browser now? [y/N]: ".bold());
+                use std::io::Write;
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if input.trim().eq_ignore_ascii_case("y") {
+                    open::that(url)?;
+                    println!("{}", format!("✓ Browser opened at {}", url).green());
+                }
+            } else {
+                // Default: auto-open browser after a short delay
+                let url_string = url.to_string();
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    if let Err(e) = open::that(&url_string) {
+                        eprintln!("Failed to open browser: {}", e);
+                    }
+                });
                 println!("{}", format!("✓ Browser opened at {}", url).green());
             }
-        } else {
-            // Default: auto-open browser after a short delay
-            let url_string = url.to_string();
-            tokio::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-                if let Err(e) = open::that(&url_string) {
-                    eprintln!("Failed to open browser: {}", e);
-                }
-            });
-            println!("{}", format!("✓ Browser opened at {}", url).green());
         }
 
         println!(
@@ -628,21 +655,23 @@ async fn start_server(root: &Path, port: u16, url: &str, prompt: bool, foregroun
         println!("{} {}", "Logs:".cyan(), log_file.magenta());
         println!();
 
-        // Open browser: auto by default, prompt with -p flag
-        if prompt {
-            print!("{}", "Open in browser now? [y/N]: ".bold());
-            use std::io::Write;
-            std::io::stdout().flush()?;
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-            if input.trim().eq_ignore_ascii_case("y") {
+        // Open browser: auto by default, prompt with -p flag, disabled with --no-browser
+        if !no_browser {
+            if prompt {
+                print!("{}", "Open in browser now? [y/N]: ".bold());
+                use std::io::Write;
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if input.trim().eq_ignore_ascii_case("y") {
+                    open::that(url)?;
+                    println!("{}", format!("✓ Browser opened at {}", url).green());
+                }
+            } else {
+                // Default: auto-open browser
                 open::that(url)?;
                 println!("{}", format!("✓ Browser opened at {}", url).green());
             }
-        } else {
-            // Default: auto-open browser
-            open::that(url)?;
-            println!("{}", format!("✓ Browser opened at {}", url).green());
         }
     }
 

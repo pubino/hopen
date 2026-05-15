@@ -54,6 +54,7 @@ hopen() {
     # Parse command-line arguments
     # -e: Exit/kill any running server and exit
     # -m: Show interactive menu when server is already running
+    # -n: No browser (headless mode)
     # -p: Prompt before opening browser (default: auto-open)
     # -r site_home: The root directory of the site (where the server will run)
     # filename: Optional file to open in browser (requires site_home)
@@ -62,15 +63,19 @@ hopen() {
     local exit_flag=false
     local menu_flag=false
     local prompt_flag=false
+    local no_browser_flag=false
     local OPTIND=1
 
-    while getopts "empr:" opt; do
+    while getopts "emnpr:" opt; do
         case "$opt" in
             e)
                 exit_flag=true
                 ;;
             m)
                 menu_flag=true
+                ;;
+            n)
+                no_browser_flag=true
                 ;;
             p)
                 prompt_flag=true
@@ -79,7 +84,7 @@ hopen() {
                 site_home="$OPTARG"
                 ;;
             *)
-                echo "Usage: hopen [-e] [-m] [-p] [-r site_home] [filename]"
+                echo "Usage: hopen [-e] [-m] [-n] [-p] [-r site_home] [filename]"
                 [[ -z "$old_nullglob" ]] && unsetopt null_glob
                 return 1
                 ;;
@@ -97,10 +102,25 @@ hopen() {
         site_home="$HOPEN_SITE_HOME"
     fi
 
+    # Fall back to ~/.hopenrc if still not provided
+    if [[ -z "$site_home" && -f "$HOME/.hopenrc" ]]; then
+        site_home=$(cat "$HOME/.hopenrc" | head -1 | xargs)
+    fi
+
     # Filename argument only makes sense when we know the site root,
     # so we can calculate the correct URL path
     if [[ -n "$filename" && -z "$site_home" ]]; then
-        echo "Error: filename argument requires either -r flag or HOPEN_SITE_HOME to be set"
+        echo "Error: filename argument requires either -r flag, HOPEN_SITE_HOME, or ~/.hopenrc to be set"
+        [[ -z "$old_nullglob" ]] && unsetopt null_glob
+        return 1
+    fi
+
+    # Ensure we have a site_home (or default to current directory)
+    # Note: ref.md suggests failing if unconfigured for the service.
+    # For the zsh function, we'll follow Rust: require configuration if not exiting.
+    if [[ -z "$site_home" && "$exit_flag" == false ]]; then
+        echo -e "${RED}${BOLD}ERROR: No site directory configured for hopen.${NC}"
+        echo -e "${YELLOW}To run hopen, please use -r <DIR>, set HOPEN_SITE_HOME, or create a ~/.hopenrc file.${NC}"
         [[ -z "$old_nullglob" ]] && unsetopt null_glob
         return 1
     fi
@@ -229,8 +249,12 @@ hopen() {
             # Default: Just open browser with existing server
             if [[ -n "$server_port" ]]; then
                 echo -e "${YELLOW}⚠ Reusing existing server (PID: $server_pid, port: $server_port)${NC}"
-                open "http://localhost:$server_port${url_path}"
-                echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$server_port${url_path}${NC}"
+                if [[ "$no_browser_flag" == false ]]; then
+                    open "http://localhost:$server_port${url_path}"
+                    echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$server_port${url_path}${NC}"
+                else
+                    echo -e "${GREEN}✓ Server is available at ${BLUE}http://localhost:$server_port${url_path}${NC}"
+                fi
             else
                 echo -e "${RED}${BOLD}✗ Could not detect server port${NC}"
                 echo -e "${YELLOW}Try manually at: ${CYAN}http://localhost:8000${NC}"
@@ -436,16 +460,18 @@ hopen() {
                 echo ""
 
                 # Auto-open browser unless -p flag
-                if [[ "$prompt_flag" == true ]]; then
-                    echo -n -e "${BOLD}Open in browser now? [y/N]: ${NC}"
-                    read -r open_browser
-                    if [[ "$open_browser" =~ ^[Yy]$ ]]; then
+                if [[ "$no_browser_flag" == false ]]; then
+                    if [[ "$prompt_flag" == true ]]; then
+                        echo -n -e "${BOLD}Open in browser now? [y/N]: ${NC}"
+                        read -r open_browser
+                        if [[ "$open_browser" =~ ^[Yy]$ ]]; then
+                            open "http://localhost:$port${url_path}"
+                            echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
+                        fi
+                    else
                         open "http://localhost:$port${url_path}"
                         echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
                     fi
-                else
-                    open "http://localhost:$port${url_path}"
-                    echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
                 fi
 
                 echo -e "${CYAN}Server running (press Ctrl+C to stop)${NC}"
@@ -493,18 +519,20 @@ hopen() {
         echo -e "${CYAN}Logs: ${MAGENTA}$log_file${NC}"
         echo ""
 
-        # Open browser: auto by default, prompt with -p flag
-        if [[ "$prompt_flag" == true ]]; then
-            echo -n -e "${BOLD}Open in browser now? [y/N]: ${NC}"
-            read -r open_browser
-            if [[ "$open_browser" =~ ^[Yy]$ ]]; then
+        # Open browser: auto by default, prompt with -p flag, disabled with -n flag
+        if [[ "$no_browser_flag" == false ]]; then
+            if [[ "$prompt_flag" == true ]]; then
+                echo -n -e "${BOLD}Open in browser now? [y/N]: ${NC}"
+                read -r open_browser
+                if [[ "$open_browser" =~ ^[Yy]$ ]]; then
+                    open "http://localhost:$port${url_path}"
+                    echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
+                fi
+            else
+                # Default: auto-open browser
                 open "http://localhost:$port${url_path}"
                 echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
             fi
-        else
-            # Default: auto-open browser
-            open "http://localhost:$port${url_path}"
-            echo -e "${GREEN}✓ Browser opened at ${BLUE}http://localhost:$port${url_path}${NC}"
         fi
     else
         echo -e "${RED}${BOLD}✗ Failed to start server${NC}"
