@@ -1,8 +1,8 @@
 class Hopen < Formula
   desc "Hopen"
   homepage "https://github.com/pubino/hopen"
-  url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.1.tar.gz"
-  sha256 "08b40fe04abd8ef3e65ee939d2b8978103a2db111fbf77cb1268dba0ffd368fa"
+  url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.2.tar.gz"
+  sha256 "7c18839a5db3adfbee54a70520a886d1c565e008772509815ac544f7a94e2410"
   license "MIT"
 
   depends_on "rust" => :build
@@ -18,13 +18,16 @@ class Hopen < Formula
   def caveats
     <<~EOS
       To use hopen without specifying -r each time, set HOPEN_SITE_HOME:
-
         export HOPEN_SITE_HOME=/path/to/your/site/root
-
       Add this to your ~/.zshrc or ~/.bashrc.
 
-      Alternatively, a zsh shell function using Python's http.server is available:
+      To run hopen as a background service:
+        1. Configure your site directory:
+           echo "/path/to/your/site" > ~/.hopenrc
+        2. Start the service:
+           brew services start hopen
 
+      Alternatively, a zsh shell function using Python's http.server is available:
         source #{share}/hopen.zsh
     EOS
   end
