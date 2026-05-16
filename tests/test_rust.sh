@@ -406,6 +406,18 @@ if command -v curl &>/dev/null; then
         ((TESTS_FAILED++))
         echo -e "${RED}✗ FAIL${NC}: Nested path should respond 200, got $response"
     fi
+
+    # Test: Charset is UTF-8
+    content_type=$(curl -s -o /dev/null -D - http://localhost:8000/index.html 2>/dev/null | grep -i "Content-Type" || echo "")
+    if [[ "$content_type" == *"charset=utf-8"* ]]; then
+        ((TESTS_RUN++))
+        ((TESTS_PASSED++))
+        echo -e "${GREEN}✓ PASS${NC}: Server serves utf-8 charset by default"
+    else
+        ((TESTS_RUN++))
+        ((TESTS_FAILED++))
+        echo -e "${RED}✗ FAIL${NC}: Server should serve utf-8 charset, got $content_type"
+    fi
 else
     echo -e "${YELLOW}⚠ SKIP${NC}: curl not available, skipping HTTP response tests"
 fi

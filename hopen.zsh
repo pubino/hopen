@@ -494,7 +494,7 @@ hopen() {
 
                 echo -e "${CYAN}Server running (press Ctrl+C to stop)${NC}"
                 # Run in foreground (blocking)
-                (cd "$server_dir" && $python_cmd -m http.server $port)
+                (cd "$server_dir" && $python_cmd -c "from http.server import SimpleHTTPRequestHandler, test; SimpleHTTPRequestHandler.extensions_map.update({'.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8'}); test(HandlerClass=SimpleHTTPRequestHandler, port=$port)")
                 [[ -z "$old_nullglob" ]] && unsetopt null_glob
                 return 0
                 ;;
@@ -521,7 +521,7 @@ hopen() {
 
     # Launch the HTTP server from server_dir (site_home if specified, otherwise PWD)
     # The subshell (cd ...) ensures the server's working directory is correct
-    (cd "$server_dir" && $python_cmd -m http.server $port) &> "$log_file" &
+    (cd "$server_dir" && $python_cmd -c "from http.server import SimpleHTTPRequestHandler, test; SimpleHTTPRequestHandler.extensions_map.update({'.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8'}); test(HandlerClass=SimpleHTTPRequestHandler, port=$port)") &> "$log_file" &
     local server_pid=$!
 
     # Disown the process so it survives terminal closure

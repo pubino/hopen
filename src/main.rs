@@ -10,6 +10,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use sysinfo::{Pid, System};
+use warp::Filter;
 
 const DEFAULT_PORT: u16 = 8000;
 const MAX_PORT: u16 = 8100;
@@ -557,7 +558,23 @@ async fn run_server(root: &Path, port: u16) -> Result<()> {
     .ok(); // Ignore error if handler already set
 
     // Serve files using warp
-    let route = warp::fs::dir(root.to_path_buf());
+    let route = warp::fs::dir(root.to_path_buf())
+        .map(|res: warp::filters::fs::File| {
+            use warp::reply::Reply;
+            let mut response = res.into_response();
+            let headers = response.headers_mut();
+            if let Some(content_type) = headers.get(warp::http::header::CONTENT_TYPE) {
+                if let Ok(ct) = content_type.to_str() {
+                    if (ct.starts_with("text/") || ct.contains("javascript") || ct.contains("json")) && !ct.contains("charset=") {
+                        let new_ct = format!("{}; charset=utf-8", ct);
+                        if let Ok(hv) = warp::http::header::HeaderValue::from_str(&new_ct) {
+                            headers.insert(warp::http::header::CONTENT_TYPE, hv);
+                        }
+                    }
+                }
+            }
+            response
+        });
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
 
     warp::serve(route).run(addr).await;

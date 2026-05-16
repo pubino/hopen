@@ -451,6 +451,54 @@ assert_not_contains "$output" "invalid" "-n flag is accepted"
 echo ""
 
 # ============================================================================
+# Section 12: HTTP Server Response Tests
+# ============================================================================
+echo -e "${BOLD}--- HTTP Server Response Tests ---${NC}"
+
+cleanup_servers
+# Use a directory with an HTML file
+TEST_SITE_DIR=$(mktemp -d)
+echo "<html><body>Response Test</body></html>" > "$TEST_SITE_DIR/index.html"
+cd "$TEST_SITE_DIR"
+
+# Start server in background
+hopen -n -r . &>/dev/null &
+sleep 1
+
+# Test: Server responds to HTTP request
+if command -v curl &>/dev/null; then
+    response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/index.html 2>/dev/null || echo "000")
+    if [[ "$response" == "200" ]]; then
+        ((TESTS_RUN++))
+        ((TESTS_PASSED++))
+        echo -e "${GREEN}✓ PASS${NC}: Server responds with 200 for valid file"
+    else
+        ((TESTS_RUN++))
+        ((TESTS_FAILED++))
+        echo -e "${RED}✗ FAIL${NC}: Server should respond 200, got $response"
+    fi
+
+    # Test: Charset is UTF-8
+    content_type=$(curl -s -o /dev/null -D - http://localhost:8000/index.html 2>/dev/null | grep -i "Content-Type" || echo "")
+    if [[ "$content_type" == *"charset=utf-8"* ]]; then
+        ((TESTS_RUN++))
+        ((TESTS_PASSED++))
+        echo -e "${GREEN}✓ PASS${NC}: Server serves utf-8 charset by default"
+    else
+        ((TESTS_RUN++))
+        ((TESTS_FAILED++))
+        echo -e "${RED}✗ FAIL${NC}: Server should serve utf-8 charset, got $content_type"
+    fi
+else
+    echo -e "${YELLOW}⚠ SKIP${NC}: curl not available, skipping HTTP response tests"
+fi
+
+cleanup_servers
+rm -rf "$TEST_SITE_DIR"
+
+echo ""
+
+# ============================================================================
 # Cleanup
 # ============================================================================
 cleanup_servers
