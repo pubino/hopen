@@ -1,8 +1,8 @@
 class Hopen < Formula
   desc "Hopen"
   homepage "https://github.com/pubino/hopen"
-  url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.4.tar.gz"
-  sha256 "7287cfd0c69739f10c56557659e2597f8788495880ad913adff87ba0ff3f5299"
+  url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.5.tar.gz"
+  sha256 "e0b945ad52bba4c379eab439a4bd672113d8c2a7008a160b887bb2a997ac509d"
   license "MIT"
 
   depends_on "rust" => :build

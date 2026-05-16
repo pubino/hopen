@@ -165,20 +165,20 @@ To publish a new release that users can install via `brew upgrade`:
 
 1. **Update the version** in `Cargo.toml`:
    ```toml
-   version = "0.2.4"
+   version = "0.2.5"
    ```
 
 2. **Commit and tag** the release:
    ```bash
    git add Cargo.toml Cargo.lock
-   git commit -m "Bump version to 0.2.4"
-   git tag v0.2.4
+   git commit -m "Bump version to 0.2.5"
+   git tag v0.2.5
    git push origin main --tags
    ```
 
 3. **Get the SHA256** of the release tarball:
    ```bash
-   curl -sL https://github.com/pubino/hopen/archive/refs/tags/v0.2.4.tar.gz | shasum -a 256
+   curl -sL https://github.com/pubino/hopen/archive/refs/tags/v0.2.5.tar.gz | shasum -a 256
    ```
 
 4. **Update the formula** in both repositories:
@@ -188,7 +188,7 @@ To publish a new release that users can install via `brew upgrade`:
 
    Update these fields:
    ```ruby
-   url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.4.tar.gz"
+   url "https://github.com/pubino/hopen/archive/refs/tags/v0.2.5.tar.gz"
    sha256 "<new-sha256-hash>"
    ```
 
